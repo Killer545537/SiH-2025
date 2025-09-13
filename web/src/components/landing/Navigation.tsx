@@ -47,12 +47,15 @@ export function Navigation() {
 
                     <div className='hidden items-center space-x-4 md:flex'>
                         <Button
+                            asChild
                             variant='outline'
                             className='border-primary text-primary hover:bg-primary hover:text-primary-foreground bg-transparent'
                         >
-                            Sign In
+                            <a href='/sign-in'>Sign In</a>
                         </Button>
-                        <Button className='bg-primary text-primary-foreground hover:bg-primary/90'>Sign Up</Button>
+                        <Button asChild className='bg-primary text-primary-foreground hover:bg-primary/90'>
+                            <a href='/sign-up'>Sign Up</a>
+                        </Button>
                     </div>
 
                     <div className='md:hidden'>
@@ -79,10 +82,12 @@ export function Navigation() {
                             <a href='#testimonials' onClick={() => setIsMenuOpen(false)}>Testimonials</a>
                         </Button>
                         <div className='space-y-2 pt-4'>
-                            <Button variant='outline' className='w-full bg-transparent'>
-                                Sign In
+                            <Button asChild variant='outline' className='w-full bg-transparent'>
+                                <a href='/sign-in' onClick={() => setIsMenuOpen(false)}>Sign In</a>
                             </Button>
-                            <Button className='bg-primary text-primary-foreground w-full'>Sign Up</Button>
+                            <Button asChild className='bg-primary text-primary-foreground w-full'>
+                                <a href='/sign-up' onClick={() => setIsMenuOpen(false)}>Sign Up</a>
+                            </Button>
                         </div>
                     </div>
                 </div>

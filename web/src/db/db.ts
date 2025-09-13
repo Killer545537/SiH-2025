@@ -1,5 +1,5 @@
 import { neon } from '@neondatabase/serverless';
-import { CONFIG } from '@/config';
+import { CONFIG } from '@/config/server';
 import { drizzle } from 'drizzle-orm/neon-http';
 import { schema } from '@/db/schema';
 
