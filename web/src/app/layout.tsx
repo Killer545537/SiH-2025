@@ -8,10 +8,10 @@ export const metadata: Metadata = {
     keywords: ['Internship', 'Career', 'Government'],
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-    return (
-        <html lang='en'>
-            <body className='antialiased'>{children}</body>
-        </html>
-    );
-}
+const RootLayout = ({ children }: Readonly<{ children: React.ReactNode }>) => (
+    <html lang='en'>
+        <body className='antialiased'>{children}</body>
+    </html>
+);
+
+export default RootLayout;

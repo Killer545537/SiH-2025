@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Menu, X } from 'lucide-react';
 
-export function Navigation() {
+export const Navigation = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isScrolled, setIsScrolled] = useState(false);
 
@@ -70,23 +70,35 @@ export function Navigation() {
                 <div className='border-border bg-background border-t md:hidden'>
                     <div className='space-y-1 px-2 pt-2 pb-3 sm:px-3'>
                         <Button asChild variant='ghost' className='w-full justify-start'>
-                            <a href='#home' onClick={() => setIsMenuOpen(false)}>Home</a>
+                            <a href='#home' onClick={() => setIsMenuOpen(false)}>
+                                Home
+                            </a>
                         </Button>
                         <Button asChild variant='ghost' className='w-full justify-start'>
-                            <a href='#about' onClick={() => setIsMenuOpen(false)}>About</a>
+                            <a href='#about' onClick={() => setIsMenuOpen(false)}>
+                                About
+                            </a>
                         </Button>
                         <Button asChild variant='ghost' className='w-full justify-start'>
-                            <a href='#how-it-works' onClick={() => setIsMenuOpen(false)}>How It Works</a>
+                            <a href='#how-it-works' onClick={() => setIsMenuOpen(false)}>
+                                How It Works
+                            </a>
                         </Button>
                         <Button asChild variant='ghost' className='w-full justify-start'>
-                            <a href='#testimonials' onClick={() => setIsMenuOpen(false)}>Testimonials</a>
+                            <a href='#testimonials' onClick={() => setIsMenuOpen(false)}>
+                                Testimonials
+                            </a>
                         </Button>
                         <div className='space-y-2 pt-4'>
                             <Button asChild variant='outline' className='w-full bg-transparent'>
-                                <a href='/sign-in' onClick={() => setIsMenuOpen(false)}>Sign In</a>
+                                <a href='/sign-in' onClick={() => setIsMenuOpen(false)}>
+                                    Sign In
+                                </a>
                             </Button>
                             <Button asChild className='bg-primary text-primary-foreground w-full'>
-                                <a href='/sign-up' onClick={() => setIsMenuOpen(false)}>Sign Up</a>
+                                <a href='/sign-up' onClick={() => setIsMenuOpen(false)}>
+                                    Sign Up
+                                </a>
                             </Button>
                         </div>
                     </div>
@@ -94,4 +106,4 @@ export function Navigation() {
             )}
         </nav>
     );
-}
+};

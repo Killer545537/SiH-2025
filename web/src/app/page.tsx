@@ -8,7 +8,7 @@ import { CTA } from '@/components/landing/CTA';
 import { Footer } from '@/components/landing/Footer';
 import { Award, Building2, Target, Users } from 'lucide-react';
 
-export default function Home() {
+const Home = () => {
     const companies = [
         'Google',
         'Microsoft',
@@ -78,4 +78,6 @@ export default function Home() {
             <Footer />
         </div>
     );
-}
+};
+
+export default Home;
