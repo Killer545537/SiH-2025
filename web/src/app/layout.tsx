@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 };
 
 const RootLayout = ({ children }: Readonly<{ children: React.ReactNode }>) => (
-    <html lang='en'>
+    <html lang='en' suppressHydrationWarning>
         <body className='antialiased'>{children}</body>
     </html>
 );
