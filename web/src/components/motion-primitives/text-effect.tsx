@@ -179,7 +179,7 @@ const createVariantsWithTransition = (
     };
 };
 
-export function TextEffect({
+export const TextEffect = ({
     children,
     per = 'word',
     as = 'p',
@@ -196,7 +196,7 @@ export function TextEffect({
     containerTransition,
     segmentTransition,
     style,
-}: TextEffectProps) {
+}: TextEffectProps) => {
     const segments = splitText(children, per);
     const MotionTag = motion[as as keyof typeof motion] as typeof motion.div;
 
@@ -259,4 +259,4 @@ export function TextEffect({
             )}
         </AnimatePresence>
     );
-}
+};
