@@ -29,21 +29,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 // Import validation schemas and server actions
 import {
     BankData,
+    bankSectionSchema,
     ContactData,
     contactDataSchema,
     Education,
+    educationSectionSchema,
     Language,
     PersonalData,
     personalDataSchema,
     SkillsData,
+    skillsSectionSchema,
 } from '@/lib/validations/profile';
 import { z } from 'zod';
 
 import {
     getProfileStatusAction,
+    saveBankDataAction,
     saveCompleteProfileAction,
     saveContactDataAction,
+    saveEducationDataAction,
     savePersonalDataAction,
+    saveSkillsDataAction,
     sendEmailOTPAction,
     validateIFSCAction,
     verifyEmailOTPAction,
@@ -370,6 +376,55 @@ const ProfilePage = () => {
             }
         } catch (_error) {
             alert('Failed to save contact information');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const saveEducationSection = async () => {
+        const educationSectionData = { educations };
+        if (!validateSection(educationSectionData, educationSectionSchema, 'education')) return;
+
+        setIsLoading(true);
+        try {
+            const result = await saveEducationDataAction(educations);
+            if (result.success) {
+                alert(result.message);
+            }
+        } catch (_error) {
+            alert('Failed to save education information');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const saveBankSection = async () => {
+        if (!validateSection(bankData, bankSectionSchema, 'bank')) return;
+
+        setIsLoading(true);
+        try {
+            const result = await saveBankDataAction(bankData);
+            if (result.success) {
+                alert('Bank information saved successfully!');
+            }
+        } catch (_error) {
+            alert('Failed to save bank information');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const saveSkillsSection = async () => {
+        if (!validateSection(skillsData, skillsSectionSchema, 'skills')) return;
+
+        setIsLoading(true);
+        try {
+            const result = await saveSkillsDataAction(skillsData);
+            if (result.success) {
+                alert('Skills information saved successfully!');
+            }
+        } catch (_error) {
+            alert('Failed to save skills information');
         } finally {
             setIsLoading(false);
         }
@@ -869,13 +924,38 @@ const ProfilePage = () => {
                                         <CardTitle>Educational Qualifications</CardTitle>
                                         <CardDescription>Add your educational background</CardDescription>
                                     </div>
-                                    <Button onClick={addEducation} className='flex items-center gap-2'>
-                                        <Plus className='h-4 w-4' />
-                                        Add Education
-                                    </Button>
+                                    <div className='flex items-center gap-2'>
+                                        <Button
+                                            onClick={saveEducationSection}
+                                            variant='outline'
+                                            size='sm'
+                                            disabled={isLoading}
+                                        >
+                                            <Save className='mr-2 h-4 w-4' />
+                                            Save Section
+                                        </Button>
+                                        <Button onClick={addEducation} className='flex items-center gap-2'>
+                                            <Plus className='h-4 w-4' />
+                                            Add Education
+                                        </Button>
+                                    </div>
                                 </div>
                             </CardHeader>
                             <CardContent className='space-y-6'>
+                                {Object.entries(errors).filter(([key]) => key.startsWith('education')).length > 0 && (
+                                    <div className='bg-destructive/10 border-destructive/20 rounded-md border p-3'>
+                                        <h4 className='text-destructive mb-2 text-sm font-medium'>
+                                            Please fix the following errors:
+                                        </h4>
+                                        <ul className='text-destructive space-y-1 text-xs'>
+                                            {Object.entries(errors)
+                                                .filter(([key]) => key.startsWith('education'))
+                                                .map(([key, message]) => (
+                                                    <li key={key}>• {message}</li>
+                                                ))}
+                                        </ul>
+                                    </div>
+                                )}
                                 {educations.length === 0 ? (
                                     <div className='text-muted-foreground py-8 text-center'>
                                         <GraduationCap className='mx-auto mb-4 h-12 w-12 opacity-50' />
@@ -1028,10 +1108,37 @@ const ProfilePage = () => {
                     <TabsContent value='bank'>
                         <Card>
                             <CardHeader>
-                                <CardTitle>Bank Details</CardTitle>
-                                <CardDescription>Your banking information for stipend payments</CardDescription>
+                                <div className='flex items-center justify-between'>
+                                    <div>
+                                        <CardTitle>Bank Details</CardTitle>
+                                        <CardDescription>Your banking information for stipend payments</CardDescription>
+                                    </div>
+                                    <Button
+                                        onClick={saveBankSection}
+                                        variant='outline'
+                                        size='sm'
+                                        disabled={isLoading}
+                                    >
+                                        <Save className='mr-2 h-4 w-4' />
+                                        Save Section
+                                    </Button>
+                                </div>
                             </CardHeader>
                             <CardContent className='space-y-4'>
+                                {Object.entries(errors).filter(([key]) => key.startsWith('bank')).length > 0 && (
+                                    <div className='bg-destructive/10 border-destructive/20 rounded-md border p-3'>
+                                        <h4 className='text-destructive mb-2 text-sm font-medium'>
+                                            Please fix the following errors:
+                                        </h4>
+                                        <ul className='text-destructive space-y-1 text-xs'>
+                                            {Object.entries(errors)
+                                                .filter(([key]) => key.startsWith('bank'))
+                                                .map(([key, message]) => (
+                                                    <li key={key}>• {message}</li>
+                                                ))}
+                                        </ul>
+                                    </div>
+                                )}
                                 <div className='flex items-center space-x-2'>
                                     <Checkbox
                                         id='aadhaarSeeded'
@@ -1059,16 +1166,16 @@ const ProfilePage = () => {
                                     </div>
                                     <div className='space-y-2'>
                                         <Label htmlFor='ifsc'>IFSC Code *</Label>
-                                            <Input
-                                                id='ifsc'
-                                                value={bankData.ifsc}
-                                                onChange={(e) =>
-                                                    setBankData({ ...bankData, ifsc: e.target.value.toUpperCase() })
-                                                }
-                                                onBlur={() => handleIFSCValidation(bankData.ifsc)}
-                                                placeholder='Enter IFSC code'
-                                                maxLength={11}
-                                            />
+                                        <Input
+                                            id='ifsc'
+                                            value={bankData.ifsc}
+                                            onChange={(e) =>
+                                                setBankData({ ...bankData, ifsc: e.target.value.toUpperCase() })
+                                            }
+                                            onBlur={() => handleIFSCValidation(bankData.ifsc)}
+                                            placeholder='Enter IFSC code'
+                                            maxLength={11}
+                                        />
                                     </div>
                                     <div className='space-y-2'>
                                         <Label htmlFor='bankName'>Bank Name *</Label>
@@ -1097,10 +1204,37 @@ const ProfilePage = () => {
                         <div className='space-y-6'>
                             <Card>
                                 <CardHeader>
-                                    <CardTitle>Skills</CardTitle>
-                                    <CardDescription>Select your skills and competencies</CardDescription>
+                                    <div className='flex items-center justify-between'>
+                                        <div>
+                                            <CardTitle>Skills</CardTitle>
+                                            <CardDescription>Select your skills and competencies</CardDescription>
+                                        </div>
+                                        <Button
+                                            onClick={saveSkillsSection}
+                                            variant='outline'
+                                            size='sm'
+                                            disabled={isLoading}
+                                        >
+                                            <Save className='mr-2 h-4 w-4' />
+                                            Save Section
+                                        </Button>
+                                    </div>
                                 </CardHeader>
                                 <CardContent>
+                                    {Object.entries(errors).filter(([key]) => key.startsWith('skills')).length > 0 && (
+                                        <div className='bg-destructive/10 border-destructive/20 rounded-md border p-3'>
+                                            <h4 className='text-destructive mb-2 text-sm font-medium'>
+                                                Please fix the following errors:
+                                            </h4>
+                                            <ul className='text-destructive space-y-1 text-xs'>
+                                                {Object.entries(errors)
+                                                    .filter(([key]) => key.startsWith('skills'))
+                                                    .map(([key, message]) => (
+                                                        <li key={key}>• {message}</li>
+                                                    ))}
+                                            </ul>
+                                        </div>
+                                    )}
                                     <div className='grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4'>
                                         {availableSkills.map((skill) => (
                                             <div key={skill} className='flex items-center space-x-2'>
