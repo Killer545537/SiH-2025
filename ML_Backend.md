@@ -15,15 +15,7 @@ This repository is structured as a small monorepo with two services:
 
 - Overview  
 - Stack and Components  
-- Requirements  
-- Setup and Run  
-  - Run with Docker  
-  - Run locally without Docker  
-- Scripts  
-- Environment Variables  
-- Project Structure  
-- License  
-- TODOs  
+- Requirements   
 
 ---
 
