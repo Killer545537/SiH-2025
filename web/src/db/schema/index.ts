@@ -21,11 +21,15 @@ export const schema = {
     ekycVerifications,
 };
 
-export {
-    profiles,
-    profileBankDetails,
-    profileEducations,
-    profileSkills,
-    profileLanguages,
-    ekycVerifications,
-};
+// export {
+//     user,
+//     verification,
+//     account,
+//     session,
+//     profiles,
+//     profileBankDetails,
+//     profileEducations,
+//     profileSkills,
+//     profileLanguages,
+//     ekycVerifications,
+// };

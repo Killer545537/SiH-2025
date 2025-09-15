@@ -12,8 +12,9 @@ import {
     profileLanguages,
     profileSkills,
     profiles,
-    verification,
-} from '@/db/schema';
+    // verification,
+} from '@/db/schema/onboarding-schema';
+import { verification } from '@/db/schema/auth-schema';
 import { auth } from '@/lib/auth';
 import {
     bankDataSchema,
@@ -49,8 +50,9 @@ type ProfileStatusInput = {
 const EMAIL_OTP_EXPIRY_MINUTES = 10;
 
 const requireSession = async () => {
+    const rawHeaders = await headers();
     const session = await auth.api.getSession({
-        headers: Object.fromEntries(headers().entries()),
+        headers: rawHeaders,
     });
 
     if (!session?.user?.id) {
@@ -133,7 +135,7 @@ export const savePersonalDataAction = async (data: PersonalData) => {
             .update(profiles)
             .set({
                 name: validatedData.name,
-                dob: dobDate ?? null,
+                dob: dobDate ? dobDate.toISOString().slice(0, 10) : null,
                 gender: validatedData.gender,
                 fatherName: validatedData.fatherName,
                 category: validatedData.category,
@@ -168,7 +170,7 @@ export const savePersonalDataAction = async (data: PersonalData) => {
             return {
                 success: false,
                 message: 'Validation failed',
-                errors: error.errors,
+                errors: error.issues,
             } as const;
         }
 
@@ -243,7 +245,7 @@ export const sendEmailOTPAction = async (email: string) => {
             return {
                 success: false,
                 message: 'Failed to send OTP. Please check your email address.',
-                errors: error.errors,
+                errors: error.issues,
             } as const;
         }
 
@@ -284,7 +286,7 @@ export const verifyEmailOTPAction = async (data: z.infer<typeof emailVerificatio
             } as const;
         }
 
-        if (record.expiresAt < new Date()) {
+        if (new Date(record.expiresAt) < new Date()) {
             await db.delete(verification).where(eq(verification.id, record.id));
             return {
                 success: false,
@@ -299,19 +301,17 @@ export const verifyEmailOTPAction = async (data: z.infer<typeof emailVerificatio
             } as const;
         }
 
-        await db.transaction(async (tx) => {
-            await tx
-                .update(profiles)
-                .set({
-                    email: normalizedEmail,
-                    isEmailVerified: true,
-                    emailVerifiedAt: new Date(),
-                    updatedAt: new Date(),
-                })
-                .where(eq(profiles.userId, user.id));
+        await db
+            .update(profiles)
+            .set({
+                email: normalizedEmail,
+                isEmailVerified: true,
+                emailVerifiedAt: new Date(),
+                updatedAt: new Date(),
+            })
+            .where(eq(profiles.userId, user.id));
 
-            await tx.delete(verification).where(eq(verification.id, record.id));
-        });
+        await db.delete(verification).where(eq(verification.id, record.id));
 
         return {
             success: true,
@@ -323,7 +323,7 @@ export const verifyEmailOTPAction = async (data: z.infer<typeof emailVerificatio
             return {
                 success: false,
                 message: 'Invalid OTP format',
-                errors: error.errors,
+                errors: error.issues,
             } as const;
         }
 
@@ -377,7 +377,7 @@ export const saveContactDataAction = async (data: ContactData) => {
             return {
                 success: false,
                 message: 'Validation failed',
-                errors: error.errors,
+                errors: error.issues,
             } as const;
         }
 
@@ -402,24 +402,22 @@ export const saveEducationDataAction = async (educations: Education[]) => {
         const { user } = await requireSession();
         await ensureProfile(user.id);
 
-        await db.transaction(async (tx) => {
-            await tx.delete(profileEducations).where(eq(profileEducations.profileId, user.id));
+        await db.delete(profileEducations).where(eq(profileEducations.profileId, user.id));
 
-            if (validatedData.length > 0) {
-                await tx.insert(profileEducations).values(
-                    validatedData.map((education) => ({
-                        profileId: user.id,
-                        level: education.level,
-                        subject: education.subject ?? null,
-                        board: education.board,
-                        institute: education.institute,
-                        yearOfPassing: Number.parseInt(education.year, 10),
-                        marksType: education.marksType,
-                        marksValue: education.marksValue,
-                    }))
-                );
-            }
-        });
+        if (validatedData.length > 0) {
+            await db.insert(profileEducations).values(
+                validatedData.map((education) => ({
+                    profileId: user.id,
+                    level: education.level,
+                    subject: education.subject ?? null,
+                    board: education.board,
+                    institute: education.institute,
+                    yearOfPassing: Number.parseInt(education.year, 10),
+                    marksType: education.marksType,
+                    marksValue: education.marksValue,
+                }))
+            );
+        }
 
         return {
             success: true,
@@ -431,7 +429,7 @@ export const saveEducationDataAction = async (educations: Education[]) => {
             return {
                 success: false,
                 message: 'Validation failed',
-                errors: error.errors,
+                errors: error.issues,
             } as const;
         }
 
@@ -539,7 +537,7 @@ export const saveBankDataAction = async (data: BankData) => {
             return {
                 success: false,
                 message: 'Validation failed',
-                errors: error.errors,
+                errors: error.issues,
             } as const;
         }
 
@@ -564,28 +562,26 @@ export const saveSkillsDataAction = async (data: SkillsData) => {
         const { user } = await requireSession();
         await ensureProfile(user.id);
 
-        await db.transaction(async (tx) => {
-            await tx.delete(profileSkills).where(eq(profileSkills.profileId, user.id));
-            if (validatedData.skills.length > 0) {
-                await tx.insert(profileSkills).values(
-                    validatedData.skills.map((skill) => ({
-                        profileId: user.id,
-                        skill,
-                    }))
-                );
-            }
+        await db.delete(profileSkills).where(eq(profileSkills.profileId, user.id));
+        if (validatedData.skills.length > 0) {
+            await db.insert(profileSkills).values(
+                validatedData.skills.map((skill) => ({
+                    profileId: user.id,
+                    skill,
+                }))
+            );
+        }
 
-            await tx.delete(profileLanguages).where(eq(profileLanguages.profileId, user.id));
-            if (validatedData.languages.length > 0) {
-                await tx.insert(profileLanguages).values(
-                    validatedData.languages.map((language) => ({
-                        profileId: user.id,
-                        name: language.name,
-                        proficiency: language.proficiency,
-                    }))
-                );
-            }
-        });
+        await db.delete(profileLanguages).where(eq(profileLanguages.profileId, user.id));
+        if (validatedData.languages.length > 0) {
+            await db.insert(profileLanguages).values(
+                validatedData.languages.map((language) => ({
+                    profileId: user.id,
+                    name: language.name,
+                    proficiency: language.proficiency,
+                }))
+            );
+        }
 
         return {
             success: true,
@@ -597,7 +593,7 @@ export const saveSkillsDataAction = async (data: SkillsData) => {
             return {
                 success: false,
                 message: 'Validation failed',
-                errors: error.errors,
+                errors: error.issues,
             } as const;
         }
 
@@ -694,7 +690,7 @@ export const saveCompleteProfileAction = async (data: z.infer<typeof completePro
             return {
                 success: false,
                 message: 'Profile validation failed',
-                errors: error.errors,
+                errors: error.issues,
             } as const;
         }
 

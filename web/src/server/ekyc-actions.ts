@@ -6,7 +6,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '@/db/db';
-import { ekycVerifications } from '@/db/schema';
+import { ekycVerifications } from '@/db/schema/onboarding-schema';
 import { auth } from '@/lib/auth';
 import { aadhaarSchema, ekycDataSchema, otpSchema } from '@/lib/validations/ekyc';
 
@@ -28,8 +28,9 @@ type EkycVerificationData = {
 const OTP_EXPIRY_MINUTES = 5;
 
 const requireSession = async () => {
+    const rawHeaders = await headers();
     const session = await auth.api.getSession({
-        headers: Object.fromEntries(headers().entries()),
+        headers: rawHeaders,
     });
 
     if (!session?.user?.id) {
@@ -109,7 +110,7 @@ export const verifyAadhaarAction = async (data: z.infer<typeof aadhaarSchema>) =
             return {
                 success: false,
                 message: 'Invalid Aadhaar details provided',
-                errors: error.errors,
+                errors: error.issues,
             } as const;
         }
 
@@ -205,7 +206,7 @@ export const verifyOTPAction = async (otp: string, transactionId: string) => {
             return {
                 success: false,
                 message: 'OTP validation failed',
-                errors: error.errors,
+                errors: error.issues,
             } as const;
         }
 
@@ -355,7 +356,7 @@ export const saveEKYCDataAction = async (data: z.infer<typeof ekycDataSchema>) =
             return {
                 success: false,
                 message: 'Invalid eKYC payload',
-                errors: error.errors,
+                errors: error.issues,
             } as const;
         }
 

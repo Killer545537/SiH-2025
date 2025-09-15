@@ -57,6 +57,20 @@ const ProfilePage = () => {
     const [otpSent, setOtpSent] = useState(false);
     const [otpValue, setOtpValue] = useState('');
 
+    const clearErrors = (...keys: string[]) => {
+        setErrors((prev) => {
+            let changed = false;
+            const next = { ...prev };
+            keys.forEach((key) => {
+                if (key in next) {
+                    delete next[key];
+                    changed = true;
+                }
+            });
+            return changed ? next : prev;
+        });
+    };
+
     // Mock eKYC data (this would come from the previous step)
     const [personalData, setPersonalData] = useState<PersonalData>({
         name: 'Rahul Kumar Singh',
@@ -275,6 +289,7 @@ const ProfilePage = () => {
             const result = await sendEmailOTPAction(contactData.email);
             if (result.success) {
                 setOtpSent(true);
+                clearErrors('contact.email', 'contact.otp');
                 // For demo purposes, show the OTP
                 alert(`Demo OTP sent: ${result.mockOTP}`);
             } else {
@@ -297,6 +312,7 @@ const ProfilePage = () => {
                 setContactData((prev) => ({ ...prev, emailVerified: true }));
                 setOtpSent(false);
                 setOtpValue('');
+                clearErrors('contact.email', 'contact.otp');
             } else {
                 setErrors((prev) => ({ ...prev, 'contact.otp': result.message }));
             }
@@ -774,7 +790,16 @@ const ProfilePage = () => {
                                             id='email'
                                             type='email'
                                             value={contactData.email}
-                                            onChange={(e) => setContactData({ ...contactData, email: e.target.value })}
+                                            onChange={(e) => {
+                                                clearErrors('contact.email', 'contact.otp');
+                                                setOtpSent(false);
+                                                setOtpValue('');
+                                                setContactData((prev) => ({
+                                                    ...prev,
+                                                    email: e.target.value,
+                                                    emailVerified: false,
+                                                }));
+                                            }}
                                             placeholder='Enter your email address'
                                             className={`flex-1 ${errors['contact.email'] ? 'border-destructive' : ''}`}
                                             disabled={contactData.emailVerified}
