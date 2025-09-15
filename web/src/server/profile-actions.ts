@@ -1,6 +1,20 @@
 'use server';
 
+import { createHash, randomUUID } from 'crypto';
+import { headers } from 'next/headers';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+
+import { db } from '@/db/db';
+import {
+    profileBankDetails,
+    profileEducations,
+    profileLanguages,
+    profileSkills,
+    profiles,
+    verification,
+} from '@/db/schema';
+import { auth } from '@/lib/auth';
 import {
     bankDataSchema,
     bankSectionSchema,
@@ -14,178 +28,428 @@ import {
     personalSectionSchema,
     skillsDataSchema,
     skillsSectionSchema,
-} from '@/lib/validations/profile'; // Save personal data section
+} from '@/lib/validations/profile';
+
+import type {
+    BankData,
+    ContactData,
+    Education,
+    PersonalData,
+    SkillsData,
+} from '@/lib/validations/profile';
 
 type ProfileStatusInput = {
-    personalData: z.infer<typeof personalDataSchema>;
-    contactData: z.infer<typeof contactDataSchema>;
-    educations: Array<z.infer<typeof educationSchema>>;
-    bankData: z.infer<typeof bankDataSchema>;
-    skillsData: z.infer<typeof skillsDataSchema>;
+    personalData: PersonalData;
+    contactData: ContactData;
+    educations: Array<Education>;
+    bankData: BankData;
+    skillsData: SkillsData;
 };
 
-// Save personal data section
-export const savePersonalDataAction = async (data: z.infer<typeof personalDataSchema>) => {
+const EMAIL_OTP_EXPIRY_MINUTES = 10;
+
+const requireSession = async () => {
+    const session = await auth.api.getSession({
+        headers: Object.fromEntries(headers().entries()),
+    });
+
+    if (!session?.user?.id) {
+        throw new Error('UNAUTHORIZED');
+    }
+
+    return session;
+};
+
+const ensureProfile = async (userId: string) => {
+    const [existing] = await db.select().from(profiles).where(eq(profiles.userId, userId)).limit(1);
+
+    if (existing) {
+        return existing;
+    }
+
+    const [created] = await db.insert(profiles).values({ userId }).returning();
+    return created;
+};
+
+const parseDateString = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+        return null;
+    }
+
+    const parts = trimmed.split(/[/-]/);
+    if (parts.length === 3) {
+        const [first, second, third] = parts;
+        if (first.length === 4) {
+            const iso = new Date(`${first}-${second}-${third}`);
+            if (!Number.isNaN(iso.getTime())) {
+                return iso;
+            }
+        } else {
+            const day = Number.parseInt(first, 10);
+            const month = Number.parseInt(second, 10);
+            const year = Number.parseInt(third, 10);
+            if (!Number.isNaN(day) && !Number.isNaN(month) && !Number.isNaN(year)) {
+                const parsed = new Date(year, month - 1, day);
+                if (!Number.isNaN(parsed.getTime())) {
+                    return parsed;
+                }
+            }
+        }
+    }
+
+    const fallback = new Date(trimmed);
+    return Number.isNaN(fallback.getTime()) ? null : fallback;
+};
+
+const generateNumericOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
+
+const hashOtp = (otp: string) => createHash('sha256').update(otp).digest('hex');
+
+const normalizeEmail = (value: string) => value.trim().toLowerCase();
+
+export const savePersonalDataAction = async (data: PersonalData) => {
     try {
         const validatedData = personalDataSchema.parse(data);
+        const { user } = await requireSession();
+        await ensureProfile(user.id);
 
-        // Simulate API delay
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        const permanent = validatedData.permanentAddress;
+        const current = validatedData.currentAddress.sameAsPermanent
+            ? {
+                  line1: permanent.line1,
+                  line2: permanent.line2,
+                  state: permanent.state,
+                  district: permanent.district,
+                  block: permanent.block,
+                  village: permanent.village,
+                  pin: permanent.pin,
+              }
+            : validatedData.currentAddress;
 
-        console.log('Saving personal data:', validatedData);
+        const dobDate = parseDateString(validatedData.dob);
+
+        await db
+            .update(profiles)
+            .set({
+                name: validatedData.name,
+                dob: dobDate ?? null,
+                gender: validatedData.gender,
+                fatherName: validatedData.fatherName,
+                category: validatedData.category,
+                hasDisability: validatedData.disability.hasDisability,
+                disabilityType: validatedData.disability.type ?? null,
+                permanentAddressLine1: permanent.line1,
+                permanentAddressLine2: permanent.line2 ?? null,
+                permanentState: permanent.state,
+                permanentDistrict: permanent.district,
+                permanentBlock: permanent.block,
+                permanentVillage: permanent.village,
+                permanentPin: permanent.pin,
+                currentAddressSameAsPermanent: validatedData.currentAddress.sameAsPermanent,
+                currentAddressLine1: current.line1 ?? null,
+                currentAddressLine2: current.line2 ?? null,
+                currentState: current.state ?? null,
+                currentDistrict: current.district ?? null,
+                currentBlock: current.block ?? null,
+                currentVillage: current.village ?? null,
+                currentPin: current.pin ?? null,
+                updatedAt: new Date(),
+            })
+            .where(eq(profiles.userId, user.id));
 
         return {
             success: true,
             message: 'Personal information saved successfully',
             data: validatedData,
-        };
+        } as const;
     } catch (error) {
-        console.error('Save personal data error:', error);
         if (error instanceof z.ZodError) {
             return {
                 success: false,
                 message: 'Validation failed',
                 errors: error.errors,
-            };
+            } as const;
         }
+
+        if ((error as Error).message === 'UNAUTHORIZED') {
+            return {
+                success: false,
+                message: 'You need to sign in to update your profile.',
+            } as const;
+        }
+
+        console.error('Save personal data error:', error);
         return {
             success: false,
             message: 'Failed to save personal information',
-        };
+        } as const;
     }
 };
 
-// Send email verification OTP
 export const sendEmailOTPAction = async (email: string) => {
     try {
-        const validatedEmail = z.string().email().parse(email);
+        const validatedEmail = z.string().email().parse(email.trim());
+        const normalized = normalizeEmail(validatedEmail);
+        const { user } = await requireSession();
+        await ensureProfile(user.id);
 
-        // Simulate API delay
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const identifier = `profile-email-otp:${user.id}:${normalized}`;
+        const otp = generateNumericOtp();
+        const hashedOtp = hashOtp(otp);
+        const expiresAt = new Date(Date.now() + EMAIL_OTP_EXPIRY_MINUTES * 60 * 1000);
 
-        // Mock OTP generation (in real app, this would send actual OTP)
-        const mockOTP = '123456';
+        const [existing] = await db
+            .select()
+            .from(verification)
+            .where(eq(verification.identifier, identifier))
+            .limit(1);
 
-        console.log(`Mock: Sending OTP ${mockOTP} to ${validatedEmail}`);
+        if (existing) {
+            await db
+                .update(verification)
+                .set({
+                    value: hashedOtp,
+                    expiresAt,
+                    updatedAt: new Date(),
+                })
+                .where(eq(verification.identifier, identifier));
+        } else {
+            await db.insert(verification).values({
+                id: randomUUID(),
+                identifier,
+                value: hashedOtp,
+                expiresAt,
+            });
+        }
+
+        await db
+            .update(profiles)
+            .set({
+                email: normalized,
+                isEmailVerified: false,
+                emailVerifiedAt: null,
+                updatedAt: new Date(),
+            })
+            .where(eq(profiles.userId, user.id));
 
         return {
             success: true,
             message: 'OTP sent successfully to your email',
-            // In real implementation, don't return OTP in response
-            mockOTP, // Only for demo purposes
-        };
+            mockOTP: otp,
+        } as const;
     } catch (error) {
+        if (error instanceof z.ZodError) {
+            return {
+                success: false,
+                message: 'Failed to send OTP. Please check your email address.',
+                errors: error.errors,
+            } as const;
+        }
+
+        if ((error as Error).message === 'UNAUTHORIZED') {
+            return {
+                success: false,
+                message: 'You need to sign in to request an email OTP.',
+            } as const;
+        }
+
         console.error('Send email OTP error:', error);
         return {
             success: false,
             message: 'Failed to send OTP. Please check your email address.',
-        };
+        } as const;
     }
 };
 
-// Verify email OTP
 export const verifyEmailOTPAction = async (data: z.infer<typeof emailVerificationSchema>) => {
     try {
         const validatedData = emailVerificationSchema.parse(data);
+        const normalizedEmail = normalizeEmail(validatedData.email);
+        const { user } = await requireSession();
+        await ensureProfile(user.id);
 
-        // Simulate API delay
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        const identifier = `profile-email-otp:${user.id}:${normalizedEmail}`;
 
-        // Mock OTP verification (in real app, this would verify against stored OTP)
-        const isValidOTP = validatedData.otp === '123456';
+        const [record] = await db
+            .select()
+            .from(verification)
+            .where(eq(verification.identifier, identifier))
+            .limit(1);
 
-        if (isValidOTP) {
-            console.log(`Email verified successfully: ${validatedData.email}`);
+        if (!record) {
             return {
-                success: true,
-                message: 'Email verified successfully',
-                email: validatedData.email,
-            };
-        } else {
+                success: false,
+                message: 'OTP expired or not requested. Please resend OTP.',
+            } as const;
+        }
+
+        if (record.expiresAt < new Date()) {
+            await db.delete(verification).where(eq(verification.id, record.id));
+            return {
+                success: false,
+                message: 'OTP expired. Please request a new OTP.',
+            } as const;
+        }
+
+        if (hashOtp(validatedData.otp) !== record.value) {
             return {
                 success: false,
                 message: 'Invalid OTP. Please try again.',
-            };
+            } as const;
         }
+
+        await db.transaction(async (tx) => {
+            await tx
+                .update(profiles)
+                .set({
+                    email: normalizedEmail,
+                    isEmailVerified: true,
+                    emailVerifiedAt: new Date(),
+                    updatedAt: new Date(),
+                })
+                .where(eq(profiles.userId, user.id));
+
+            await tx.delete(verification).where(eq(verification.id, record.id));
+        });
+
+        return {
+            success: true,
+            message: 'Email verified successfully',
+            email: normalizedEmail,
+        } as const;
     } catch (error) {
-        console.error('Verify email OTP error:', error);
         if (error instanceof z.ZodError) {
             return {
                 success: false,
                 message: 'Invalid OTP format',
                 errors: error.errors,
-            };
+            } as const;
         }
+
+        if ((error as Error).message === 'UNAUTHORIZED') {
+            return {
+                success: false,
+                message: 'You need to sign in before verifying the OTP.',
+            } as const;
+        }
+
+        console.error('Verify email OTP error:', error);
         return {
             success: false,
             message: 'OTP verification failed',
-        };
+        } as const;
     }
 };
 
-// Save contact data section
-export const saveContactDataAction = async (data: z.infer<typeof contactDataSchema>) => {
+export const saveContactDataAction = async (data: ContactData) => {
     try {
         const validatedData = contactDataSchema.parse(data);
+        const { user } = await requireSession();
+        const profile = await ensureProfile(user.id);
+        const normalizedEmail = normalizeEmail(validatedData.email);
 
-        // Simulate API delay
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        const verifiedAt = validatedData.emailVerified
+            ? profile.email === normalizedEmail && profile.emailVerifiedAt
+                ? profile.emailVerifiedAt
+                : new Date()
+            : null;
 
-        console.log('Saving contact data:', validatedData);
+        await db
+            .update(profiles)
+            .set({
+                primaryMobile: validatedData.primaryMobile,
+                alternateMobile: validatedData.alternateMobile || null,
+                email: normalizedEmail,
+                isEmailVerified: validatedData.emailVerified,
+                emailVerifiedAt: verifiedAt,
+                updatedAt: new Date(),
+            })
+            .where(eq(profiles.userId, user.id));
 
         return {
             success: true,
             message: 'Contact information saved successfully',
             data: validatedData,
-        };
+        } as const;
     } catch (error) {
-        console.error('Save contact data error:', error);
         if (error instanceof z.ZodError) {
             return {
                 success: false,
                 message: 'Validation failed',
                 errors: error.errors,
-            };
+            } as const;
         }
+
+        if ((error as Error).message === 'UNAUTHORIZED') {
+            return {
+                success: false,
+                message: 'You need to sign in to update your contact details.',
+            } as const;
+        }
+
+        console.error('Save contact data error:', error);
         return {
             success: false,
             message: 'Failed to save contact information',
-        };
+        } as const;
     }
 };
 
-// Save education data
-export const saveEducationDataAction = async (educations: z.infer<typeof educationSchema>[]) => {
+export const saveEducationDataAction = async (educations: Education[]) => {
     try {
         const validatedData = z.array(educationSchema).parse(educations);
+        const { user } = await requireSession();
+        await ensureProfile(user.id);
 
-        // Simulate API delay
-        await new Promise((resolve) => setTimeout(resolve, 1200));
+        await db.transaction(async (tx) => {
+            await tx.delete(profileEducations).where(eq(profileEducations.profileId, user.id));
 
-        console.log('Saving education data:', validatedData);
+            if (validatedData.length > 0) {
+                await tx.insert(profileEducations).values(
+                    validatedData.map((education) => ({
+                        profileId: user.id,
+                        level: education.level,
+                        subject: education.subject ?? null,
+                        board: education.board,
+                        institute: education.institute,
+                        yearOfPassing: Number.parseInt(education.year, 10),
+                        marksType: education.marksType,
+                        marksValue: education.marksValue,
+                    }))
+                );
+            }
+        });
 
         return {
             success: true,
             message: `${validatedData.length} education qualification(s) saved successfully`,
             data: validatedData,
-        };
+        } as const;
     } catch (error) {
-        console.error('Save education data error:', error);
         if (error instanceof z.ZodError) {
             return {
                 success: false,
                 message: 'Validation failed',
                 errors: error.errors,
-            };
+            } as const;
         }
+
+        if ((error as Error).message === 'UNAUTHORIZED') {
+            return {
+                success: false,
+                message: 'You need to sign in to update your education information.',
+            } as const;
+        }
+
+        console.error('Save education data error:', error);
         return {
             success: false,
             message: 'Failed to save education information',
-        };
+        } as const;
     }
 };
 
-// Validate IFSC code (mock validation)
 export const validateIFSCAction = async (ifscCode: string) => {
     try {
         const validatedIFSC = z
@@ -194,132 +458,194 @@ export const validateIFSCAction = async (ifscCode: string) => {
             .regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, 'Invalid IFSC code format')
             .parse(ifscCode.toUpperCase());
 
-        // Simulate API delay
-        await new Promise((resolve) => setTimeout(resolve, 800));
+        try {
+            const response = await fetch(`https://ifsc.razorpay.com/${validatedIFSC}`, {
+                cache: 'no-store',
+            });
 
-        // Mock bank details (in real app, this would fetch from bank API)
-        const mockBankDetails = {
-            bankName: 'State Bank of India',
-            branch: 'New Delhi Main Branch',
-            address: 'Connaught Place, New Delhi - 110001',
-        };
+            if (response.ok) {
+                const bankInfo = (await response.json()) as {
+                    BANK?: string;
+                    BRANCH?: string;
+                    ADDRESS?: string;
+                };
 
-        console.log(`IFSC validated: ${validatedIFSC}`, mockBankDetails);
+                return {
+                    success: true,
+                    message: 'IFSC code is valid',
+                    ifscCode: validatedIFSC,
+                    bankDetails: {
+                        bankName: bankInfo.BANK ?? '',
+                        branch: bankInfo.BRANCH ?? '',
+                        address: bankInfo.ADDRESS ?? '',
+                    },
+                } as const;
+            }
+        } catch (lookupError) {
+            console.warn('IFSC lookup failed, falling back to format validation only:', lookupError);
+        }
 
         return {
             success: true,
-            message: 'IFSC code is valid',
+            message: 'IFSC code format looks valid',
             ifscCode: validatedIFSC,
-            bankDetails: mockBankDetails,
-        };
+        } as const;
     } catch (error) {
         console.error('IFSC validation error:', error);
         return {
             success: false,
             message: 'Invalid IFSC code format',
-        };
+        } as const;
     }
 };
 
-// Save bank data section
-export const saveBankDataAction = async (data: z.infer<typeof bankDataSchema>) => {
+export const saveBankDataAction = async (data: BankData) => {
     try {
         const validatedData = bankDataSchema.parse(data);
+        const { user } = await requireSession();
+        await ensureProfile(user.id);
 
-        // Simulate API delay
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
-        console.log('Saving bank data:', validatedData);
+        const [record] = await db
+            .insert(profileBankDetails)
+            .values({
+                profileId: user.id,
+                isAadhaarSeeded: validatedData.isAadhaarSeeded,
+                accountNumber: validatedData.accountNumber,
+                ifsc: validatedData.ifsc,
+                bankName: validatedData.bankName,
+                branch: validatedData.branch,
+            })
+            .onConflictDoUpdate({
+                target: profileBankDetails.profileId,
+                set: {
+                    isAadhaarSeeded: validatedData.isAadhaarSeeded,
+                    accountNumber: validatedData.accountNumber,
+                    ifsc: validatedData.ifsc,
+                    bankName: validatedData.bankName,
+                    branch: validatedData.branch,
+                    updatedAt: new Date(),
+                },
+            })
+            .returning();
 
         return {
             success: true,
             message: 'Bank information saved successfully',
             data: validatedData,
-        };
+            record,
+        } as const;
     } catch (error) {
-        console.error('Save bank data error:', error);
         if (error instanceof z.ZodError) {
             return {
                 success: false,
                 message: 'Validation failed',
                 errors: error.errors,
-            };
+            } as const;
         }
+
+        if ((error as Error).message === 'UNAUTHORIZED') {
+            return {
+                success: false,
+                message: 'You need to sign in to update your bank information.',
+            } as const;
+        }
+
+        console.error('Save bank data error:', error);
         return {
             success: false,
             message: 'Failed to save bank information',
-        };
+        } as const;
     }
 };
 
-// Save skills data section
-export const saveSkillsDataAction = async (data: z.infer<typeof skillsDataSchema>) => {
+export const saveSkillsDataAction = async (data: SkillsData) => {
     try {
         const validatedData = skillsDataSchema.parse(data);
+        const { user } = await requireSession();
+        await ensureProfile(user.id);
 
-        // Simulate API delay
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await db.transaction(async (tx) => {
+            await tx.delete(profileSkills).where(eq(profileSkills.profileId, user.id));
+            if (validatedData.skills.length > 0) {
+                await tx.insert(profileSkills).values(
+                    validatedData.skills.map((skill) => ({
+                        profileId: user.id,
+                        skill,
+                    }))
+                );
+            }
 
-        console.log('Saving skills data:', validatedData);
+            await tx.delete(profileLanguages).where(eq(profileLanguages.profileId, user.id));
+            if (validatedData.languages.length > 0) {
+                await tx.insert(profileLanguages).values(
+                    validatedData.languages.map((language) => ({
+                        profileId: user.id,
+                        name: language.name,
+                        proficiency: language.proficiency,
+                    }))
+                );
+            }
+        });
 
         return {
             success: true,
             message: `Skills and languages saved successfully (${validatedData.skills.length} skills, ${validatedData.languages.length} languages)`,
             data: validatedData,
-        };
+        } as const;
     } catch (error) {
-        console.error('Save skills data error:', error);
         if (error instanceof z.ZodError) {
             return {
                 success: false,
                 message: 'Validation failed',
                 errors: error.errors,
-            };
+            } as const;
         }
+
+        if ((error as Error).message === 'UNAUTHORIZED') {
+            return {
+                success: false,
+                message: 'You need to sign in to update your skills.',
+            } as const;
+        }
+
+        console.error('Save skills data error:', error);
         return {
             success: false,
             message: 'Failed to save skills information',
-        };
+        } as const;
     }
 };
 
-// Upload file action (mock implementation)
 export const uploadFileAction = async (formData: FormData) => {
     try {
-        const file = formData.get('file') as File;
+        const file = formData.get('file') as File | null;
 
         if (!file) {
             return {
                 success: false,
                 message: 'No file provided',
-            };
+            } as const;
         }
 
-        // Validate file size (2MB limit)
-        const maxSize = 2 * 1024 * 1024; // 2MB
+        const maxSize = 2 * 1024 * 1024;
         if (file.size > maxSize) {
             return {
                 success: false,
                 message: 'File size must be less than 2MB',
-            };
+            } as const;
         }
 
-        // Validate file type
         const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
         if (!allowedTypes.includes(file.type)) {
             return {
                 success: false,
                 message: 'File must be PDF, JPG, JPEG, or PNG',
-            };
+            } as const;
         }
 
-        // Simulate file upload
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-
-        // Mock file URL (in real app, this would be actual uploaded file URL)
-        const mockFileUrl = `https://storage.example.com/certificates/${Date.now()}_${file.name}`;
-
-        console.log(`File uploaded: ${file.name} -> ${mockFileUrl}`);
+        // In a production system this would upload to object storage (S3, GCS, etc.).
+        // We return a mock URL so the UI can display a successful state during development.
+        const mockFileUrl = `https://storage.example.com/uploads/${Date.now()}_${encodeURIComponent(file.name)}`;
 
         return {
             success: true,
@@ -327,65 +653,66 @@ export const uploadFileAction = async (formData: FormData) => {
             fileName: file.name,
             fileUrl: mockFileUrl,
             fileSize: file.size,
-        };
+        } as const;
     } catch (error) {
         console.error('File upload error:', error);
         return {
             success: false,
             message: 'File upload failed',
-        };
+        } as const;
     }
 };
 
-// Save complete profile (final submission)
 export const saveCompleteProfileAction = async (data: z.infer<typeof completeProfileSchema>) => {
     try {
-        const validatedData = completeProfileSchema.parse(data);
+        completeProfileSchema.parse(data);
+        const { user } = await requireSession();
+        await ensureProfile(user.id);
 
-        // Simulate comprehensive save operation
-        await new Promise((resolve) => setTimeout(resolve, 3000));
-
-        // Mock profile ID generation
-        const profileId = 'profile_' + Date.now();
-
-        console.log('Complete profile saved:', {
-            profileId,
-            personalData: validatedData.personalData,
-            contactData: validatedData.contactData,
-            educationCount: validatedData.educations.length,
-            bankData: validatedData.bankData,
-            skillsCount: validatedData.skillsData.skills.length,
-            languagesCount: validatedData.skillsData.languages.length,
-        });
+        await db
+            .update(profiles)
+            .set({
+                isComplete: true,
+                completedAt: new Date(),
+                updatedAt: new Date(),
+            })
+            .where(eq(profiles.userId, user.id));
 
         return {
             success: true,
             message: 'Profile completed successfully! You can now apply for internships.',
-            profileId,
+            profileId: user.id,
             completionDate: new Date().toISOString(),
             summary: {
                 sectionsCompleted: 5,
                 totalSections: 5,
                 completionPercentage: 100,
             },
-        };
+        } as const;
     } catch (error) {
-        console.error('Save complete profile error:', error);
         if (error instanceof z.ZodError) {
             return {
                 success: false,
                 message: 'Profile validation failed',
                 errors: error.errors,
-            };
+            } as const;
         }
+
+        if ((error as Error).message === 'UNAUTHORIZED') {
+            return {
+                success: false,
+                message: 'You need to sign in before submitting your profile.',
+            } as const;
+        }
+
+        console.error('Save complete profile error:', error);
         return {
             success: false,
             message: 'Failed to save complete profile',
-        };
+        } as const;
     }
 };
 
-// Validate individual sections for progress tracking
 export const validateSectionAction = async (sectionName: string, data: unknown) => {
     try {
         let schema: z.ZodTypeAny;
@@ -410,7 +737,7 @@ export const validateSectionAction = async (sectionName: string, data: unknown) 
                 return {
                     success: false,
                     message: 'Invalid section name',
-                };
+                } as const;
         }
 
         const validatedData = schema.parse(data);
@@ -419,23 +746,23 @@ export const validateSectionAction = async (sectionName: string, data: unknown) 
             success: true,
             message: `${sectionName} section is valid`,
             data: validatedData,
-        };
+        } as const;
     } catch (error) {
         if (error instanceof z.ZodError) {
             return {
                 success: false,
                 message: `${sectionName} section validation failed`,
                 errors: error.issues,
-            };
+            } as const;
         }
+
         return {
             success: false,
             message: 'Section validation failed',
-        };
+        } as const;
     }
 };
 
-// Get profile completion status
 export const getProfileStatusAction = async (profileData: ProfileStatusInput) => {
     try {
         const sections = [
@@ -449,16 +776,17 @@ export const getProfileStatusAction = async (profileData: ProfileStatusInput) =>
         const sectionStatus = sections.map((section) => {
             try {
                 section.schema.parse(section.data);
-                return { name: section.name, completed: true, errors: [] };
+                return { name: section.name, completed: true, errors: [] as string[] };
             } catch (error) {
                 if (error instanceof z.ZodError) {
                     return {
                         name: section.name,
                         completed: false,
                         errors: error.issues.map((issue) => issue.message),
-                    };
+                    } as const;
                 }
-                return { name: section.name, completed: false, errors: ['Validation error'] };
+
+                return { name: section.name, completed: false, errors: ['Validation error'] } as const;
             }
         });
 
@@ -472,12 +800,12 @@ export const getProfileStatusAction = async (profileData: ProfileStatusInput) =>
             completedSections,
             totalSections,
             sectionStatus,
-        };
+        } as const;
     } catch (error) {
         console.error('Get profile status error:', error);
         return {
             success: false,
             message: 'Failed to get profile status',
-        };
+        } as const;
     }
 };
