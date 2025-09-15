@@ -8,7 +8,7 @@ import { BackToHomeButton } from '@/components/back-to-home-button';
 const SignInPage = () => (
     <div className='flex min-h-[100dvh] items-center justify-center px-4'>
         <div className='w-full max-w-md'>
-            <BackToHomeButton/>
+            <BackToHomeButton />
             <Card className='w-full'>
                 <CardHeader>
                     <CardTitle>Sign in</CardTitle>
