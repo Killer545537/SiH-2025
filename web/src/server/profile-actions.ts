@@ -16,6 +16,14 @@ import {
     skillsSectionSchema,
 } from '@/lib/validations/profile'; // Save personal data section
 
+type ProfileStatusInput = {
+    personalData: z.infer<typeof personalDataSchema>;
+    contactData: z.infer<typeof contactDataSchema>;
+    educations: Array<z.infer<typeof educationSchema>>;
+    bankData: z.infer<typeof bankDataSchema>;
+    skillsData: z.infer<typeof skillsDataSchema>;
+};
+
 // Save personal data section
 export const savePersonalDataAction = async (data: z.infer<typeof personalDataSchema>) => {
     try {
@@ -378,10 +386,9 @@ export const saveCompleteProfileAction = async (data: z.infer<typeof completePro
 };
 
 // Validate individual sections for progress tracking
-export const validateSectionAction = async (sectionName: string, data: any) => {
+export const validateSectionAction = async (sectionName: string, data: unknown) => {
     try {
-        let schema;
-        let validatedData;
+        let schema: z.ZodTypeAny;
 
         switch (sectionName) {
             case 'personal':
@@ -406,7 +413,7 @@ export const validateSectionAction = async (sectionName: string, data: any) => {
                 };
         }
 
-        validatedData = schema.parse(data);
+        const validatedData = schema.parse(data);
 
         return {
             success: true,
@@ -418,7 +425,7 @@ export const validateSectionAction = async (sectionName: string, data: any) => {
             return {
                 success: false,
                 message: `${sectionName} section validation failed`,
-                errors: error.errors,
+                errors: error.issues,
             };
         }
         return {
@@ -429,7 +436,7 @@ export const validateSectionAction = async (sectionName: string, data: any) => {
 };
 
 // Get profile completion status
-export const getProfileStatusAction = async (profileData: any) => {
+export const getProfileStatusAction = async (profileData: ProfileStatusInput) => {
     try {
         const sections = [
             { name: 'personal', schema: personalSectionSchema, data: profileData.personalData },
@@ -448,7 +455,7 @@ export const getProfileStatusAction = async (profileData: any) => {
                     return {
                         name: section.name,
                         completed: false,
-                        errors: error.errors.map((e) => e.message),
+                        errors: error.issues.map((issue) => issue.message),
                     };
                 }
                 return { name: section.name, completed: false, errors: ['Validation error'] };

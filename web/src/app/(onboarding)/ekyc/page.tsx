@@ -16,8 +16,8 @@ import {
     verifyAadhaarAction,
     verifyOTPAction,
 } from '@/server/ekyc-actions';
-import type { AadhaarFormData, OTPFormData } from '@/lib/validations/ekyc';
 import { aadhaarSchema, otpSchema } from '@/lib/validations/ekyc';
+import { z } from 'zod';
 
 type VerificationStep = 'select' | 'verify' | 'otp' | 'complete';
 type VerificationMethod = 'aadhaar' | 'digilocker';
@@ -73,7 +73,7 @@ const EKYCPage = () => {
     };
 
     // Validate form data
-    const validateForm = (data: Partial<AadhaarFormData | OTPFormData>, schema: z.ZodSchema<any>) => {
+    const validateForm = <TSchema extends z.ZodTypeAny>(data: z.input<TSchema>, schema: TSchema) => {
         try {
             schema.parse(data);
             setErrors({});
@@ -81,9 +81,9 @@ const EKYCPage = () => {
         } catch (error) {
             const fieldErrors: Record<string, string> = {};
             if (error instanceof z.ZodError) {
-                error.errors?.forEach((err) => {
-                    if (err.path) {
-                        fieldErrors[err.path[0]] = err.message;
+                error.issues.forEach((issue) => {
+                    if (issue.path.length > 0 && typeof issue.path[0] === 'string') {
+                        fieldErrors[issue.path[0]] = issue.message;
                     }
                 });
             }
@@ -116,7 +116,7 @@ const EKYCPage = () => {
             } else {
                 setErrors({ general: result.message });
             }
-        } catch (error) {
+        } catch (_error) {
             setErrors({ general: 'An unexpected error occurred. Please try again.' });
         } finally {
             setIsLoading(false);
@@ -154,7 +154,7 @@ const EKYCPage = () => {
             } else {
                 setErrors({ otp: result.message });
             }
-        } catch (error) {
+        } catch (_error) {
             setErrors({ otp: 'OTP verification failed. Please try again.' });
         } finally {
             setIsLoading(false);
@@ -180,7 +180,7 @@ const EKYCPage = () => {
             } else {
                 setErrors({ general: result.message });
             }
-        } catch (error) {
+        } catch (_error) {
             setErrors({ general: 'DigiLocker authentication failed. Please try again.' });
         } finally {
             setIsLoading(false);
@@ -248,7 +248,7 @@ const EKYCPage = () => {
                                         <CreditCard className='text-primary mx-auto mb-4 h-16 w-16' />
                                         <h3 className='mb-2 font-semibold'>Aadhaar Verification</h3>
                                         <p className='text-muted-foreground mb-4 text-sm'>
-                                            Verify your identity using your Aadhaar number. We'll send an OTP to your
+                                            Verify your identity using your Aadhaar number. We&apos;ll send an OTP to your
                                             Aadhaar-linked mobile number.
                                         </p>
                                         <Button onClick={() => setStep('verify')} className='w-full'>

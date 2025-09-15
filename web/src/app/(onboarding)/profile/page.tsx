@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -37,6 +37,7 @@ import {
     personalDataSchema,
     SkillsData,
 } from '@/lib/validations/profile';
+import { z } from 'zod';
 
 import {
     getProfileStatusAction,
@@ -44,7 +45,6 @@ import {
     saveContactDataAction,
     savePersonalDataAction,
     sendEmailOTPAction,
-    uploadFileAction,
     validateIFSCAction,
     verifyEmailOTPAction,
 } from '@/server/profile-actions';
@@ -145,7 +145,7 @@ const ProfilePage = () => {
     ];
 
     // Calculate progress using server action
-    const calculateProgress = async () => {
+    const calculateProgress = useCallback(async () => {
         const result = await getProfileStatusAction({
             personalData,
             contactData,
@@ -154,7 +154,7 @@ const ProfilePage = () => {
             skillsData,
         });
         return result.success ? result.completionPercentage : 0;
-    };
+    }, [personalData, contactData, educations, bankData, skillsData]);
 
     const [progress, setProgress] = useState(0);
 
@@ -164,11 +164,15 @@ const ProfilePage = () => {
             const newProgress = await calculateProgress();
             setProgress(newProgress);
         };
-        updateProgress();
-    }, [personalData, contactData, educations, bankData, skillsData]);
+        void updateProgress();
+    }, [calculateProgress]);
 
     // Validation helper
-    const validateSection = (data: any, schema: any, sectionName: string) => {
+    const validateSection = <TSchema extends z.ZodTypeAny>(
+        data: z.infer<TSchema>,
+        schema: TSchema,
+        sectionName: string
+    ) => {
         try {
             schema.parse(data);
             setErrors((prev) => {
@@ -181,12 +185,14 @@ const ProfilePage = () => {
                 return newErrors;
             });
             return true;
-        } catch (error: any) {
-            if (error.errors) {
+        } catch (error) {
+            if (error instanceof z.ZodError) {
                 const newErrors: Record<string, string> = {};
-                error.errors.forEach((err: any) => {
-                    const field = err.path.join('.');
-                    newErrors[`${sectionName}.${field}`] = err.message;
+                error.issues.forEach((issue) => {
+                    if (issue.path.length > 0) {
+                        const field = issue.path.join('.');
+                        newErrors[`${sectionName}.${field}`] = issue.message;
+                    }
                 });
                 setErrors((prev) => ({ ...prev, ...newErrors }));
             }
@@ -274,7 +280,7 @@ const ProfilePage = () => {
             } else {
                 setErrors((prev) => ({ ...prev, 'contact.email': result.message }));
             }
-        } catch (error) {
+        } catch (_error) {
             setErrors((prev) => ({ ...prev, 'contact.email': 'Failed to send OTP' }));
         } finally {
             setIsLoading(false);
@@ -294,7 +300,7 @@ const ProfilePage = () => {
             } else {
                 setErrors((prev) => ({ ...prev, 'contact.otp': result.message }));
             }
-        } catch (error) {
+        } catch (_error) {
             setErrors((prev) => ({ ...prev, 'contact.otp': 'OTP verification failed' }));
         } finally {
             setIsLoading(false);
@@ -320,29 +326,6 @@ const ProfilePage = () => {
         }
     };
 
-    // File upload handler
-    const handleFileUpload = async (file: File, educationId: string) => {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        try {
-            const result = await uploadFileAction(formData);
-            if (result.success) {
-                // Update education with file info
-                updateEducation(
-                    educationId,
-                    'marksValue',
-                    `${educations.find((e) => e.id === educationId)?.marksValue} (Certificate: ${result.fileName})`
-                );
-                alert(`File uploaded successfully: ${result.fileName}`);
-            } else {
-                alert(`Upload failed: ${result.message}`);
-            }
-        } catch (error) {
-            alert('File upload failed');
-        }
-    };
-
     // Save individual sections
     const savePersonalSection = async () => {
         if (!validateSection(personalData, personalDataSchema, 'personal')) return;
@@ -353,7 +336,7 @@ const ProfilePage = () => {
             if (result.success) {
                 alert('Personal information saved successfully!');
             }
-        } catch (error) {
+        } catch (_error) {
             alert('Failed to save personal information');
         } finally {
             setIsLoading(false);
@@ -369,7 +352,7 @@ const ProfilePage = () => {
             if (result.success) {
                 alert('Contact information saved successfully!');
             }
-        } catch (error) {
+        } catch (_error) {
             alert('Failed to save contact information');
         } finally {
             setIsLoading(false);
@@ -507,14 +490,14 @@ const ProfilePage = () => {
 
                                 <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
                                     <div className='space-y-2'>
-                                        <Label htmlFor='fatherName'>Father's/Guardian's Name *</Label>
+                                        <Label htmlFor='fatherName'>Father&apos;s/Guardian&apos;s Name *</Label>
                                         <Input
                                             id='fatherName'
                                             value={personalData.fatherName}
                                             onChange={(e) =>
                                                 setPersonalData({ ...personalData, fatherName: e.target.value })
                                             }
-                                            placeholder="Enter father's/guardian's name"
+                                            placeholder="Enter father&apos;s/guardian&apos;s name"
                                             className={errors['personal.fatherName'] ? 'border-destructive' : ''}
                                         />
                                         {errors['personal.fatherName'] && (
@@ -526,7 +509,10 @@ const ProfilePage = () => {
                                         <Select
                                             value={personalData.category}
                                             onValueChange={(value) =>
-                                                setPersonalData({ ...personalData, category: value as any })
+                                                setPersonalData({
+                                                    ...personalData,
+                                                    category: value as PersonalData['category'],
+                                                })
                                             }
                                         >
                                             <SelectTrigger
@@ -869,7 +855,7 @@ const ProfilePage = () => {
                                     <div className='text-muted-foreground py-8 text-center'>
                                         <GraduationCap className='mx-auto mb-4 h-12 w-12 opacity-50' />
                                         <p>No educational qualifications added yet.</p>
-                                        <p className='text-sm'>Click "Add Education" to get started.</p>
+                                        <p className='text-sm'>Click &quot;Add Education&quot; to get started.</p>
                                     </div>
                                 ) : (
                                     educations.map((education, index) => (
@@ -1048,15 +1034,16 @@ const ProfilePage = () => {
                                     </div>
                                     <div className='space-y-2'>
                                         <Label htmlFor='ifsc'>IFSC Code *</Label>
-                                        <Input
-                                            id='ifsc'
-                                            value={bankData.ifsc}
-                                            onChange={(e) =>
-                                                setBankData({ ...bankData, ifsc: e.target.value.toUpperCase() })
-                                            }
-                                            placeholder='Enter IFSC code'
-                                            maxLength={11}
-                                        />
+                                            <Input
+                                                id='ifsc'
+                                                value={bankData.ifsc}
+                                                onChange={(e) =>
+                                                    setBankData({ ...bankData, ifsc: e.target.value.toUpperCase() })
+                                                }
+                                                onBlur={() => handleIFSCValidation(bankData.ifsc)}
+                                                placeholder='Enter IFSC code'
+                                                maxLength={11}
+                                            />
                                     </div>
                                     <div className='space-y-2'>
                                         <Label htmlFor='bankName'>Bank Name *</Label>
@@ -1141,7 +1128,7 @@ const ProfilePage = () => {
                                         <div className='text-muted-foreground py-8 text-center'>
                                             <Award className='mx-auto mb-4 h-12 w-12 opacity-50' />
                                             <p>No languages added yet.</p>
-                                            <p className='text-sm'>Click "Add Language" to get started.</p>
+                                            <p className='text-sm'>Click &quot;Add Language&quot; to get started.</p>
                                         </div>
                                     ) : (
                                         skillsData.languages.map((language) => (
