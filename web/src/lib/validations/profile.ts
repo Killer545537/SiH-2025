@@ -7,7 +7,7 @@ export const personalDataSchema = z.object({
     gender: z.string().min(1, 'Gender is required'),
     fatherName: z.string().min(1, "Father's/Guardian's name is required"),
     category: z.enum(['general', 'obc', 'sc', 'st'], {
-        required_error: 'Category is required',
+        message: 'Category is required',
     }),
     permanentAddress: z.object({
         line1: z.string().min(1, 'Address line 1 is required'),
@@ -54,7 +54,7 @@ export const contactDataSchema = z.object({
 export const educationSchema = z.object({
     id: z.string(),
     level: z.enum(['10th', '12th', 'diploma', 'graduation', 'postgraduation'], {
-        required_error: 'Course level is required',
+        message: 'Course level is required',
     }),
     subject: z.string().optional(),
     board: z.string().min(1, 'Board/University is required'),
@@ -69,7 +69,7 @@ export const educationSchema = z.object({
             return year >= 1950 && year <= currentYear + 1;
         }, 'Invalid year'),
     marksType: z.enum(['percentage', 'cgpa', 'grade'], {
-        required_error: 'Marks type is required',
+        message: 'Marks type is required',
     }),
     marksValue: z.string().min(1, 'Marks value is required'),
 });
@@ -97,7 +97,7 @@ export const languageSchema = z.object({
     id: z.string(),
     name: z.string().min(1, 'Language name is required'),
     proficiency: z.enum(['basic', 'intermediate', 'advanced', 'native'], {
-        required_error: 'Proficiency level is required',
+        message: 'Proficiency level is required',
     }),
 });
 
