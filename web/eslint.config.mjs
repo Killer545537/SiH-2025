@@ -47,7 +47,6 @@ const eslintConfig = [
     }),
     {
         rules: {
-            'func-style': ['error', 'expression', { allowArrowFunctions: true }],
             'prefer-arrow-callback': ['warn', { allowNamedFunctions: true }],
             'arrow-body-style': ['warn', 'as-needed'],
         },
