@@ -7,15 +7,20 @@ import {
   RecentActivity
 } from "@/types/dashboard";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { CLIENT_CONFIG } from "@/config/client";
+
+const API_BASE_URL = CLIENT_CONFIG.NEXT_PUBLIC_BASE_URL || "http://localhost:8000";
 
 // Dashboard Stats API
 export async function getDashboardStats(): Promise<DashboardStats> {
   try {
+    const token = getAuthToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
     const response = await fetch(`${API_BASE_URL}/api/dashboard/stats`, {
-      headers: {
-        'Authorization': `Bearer ${getAuthToken()}`,
-      },
+      headers,
     });
 
     if (!response.ok) {
@@ -38,10 +43,13 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 // Applications API
 export async function getApplications(limit = 10): Promise<Application[]> {
   try {
+    const token = getAuthToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
     const response = await fetch(`${API_BASE_URL}/api/applications?limit=${limit}`, {
-      headers: {
-        'Authorization': `Bearer ${getAuthToken()}`,
-      },
+      headers,
     });
 
     if (!response.ok) {
@@ -82,10 +90,13 @@ export async function getApplications(limit = 10): Promise<Application[]> {
 // Calendar Events API
 export async function getCalendarEvents(): Promise<CalendarEvent[]> {
   try {
+    const token = getAuthToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
     const response = await fetch(`${API_BASE_URL}/api/calendar/events`, {
-      headers: {
-        'Authorization': `Bearer ${getAuthToken()}`,
-      },
+      headers,
     });
 
     if (!response.ok) {
@@ -119,10 +130,13 @@ export async function getCalendarEvents(): Promise<CalendarEvent[]> {
 // Progress Data API
 export async function getProgressData(): Promise<ProgressData> {
   try {
+    const token = getAuthToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
     const response = await fetch(`${API_BASE_URL}/api/dashboard/progress`, {
-      headers: {
-        'Authorization': `Bearer ${getAuthToken()}`,
-      },
+      headers,
     });
 
     if (!response.ok) {
@@ -147,10 +161,13 @@ export async function getProgressData(): Promise<ProgressData> {
 // Recommended Internships API
 export async function getRecommendedInternships(limit = 5): Promise<Internship[]> {
   try {
+    const token = getAuthToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
     const response = await fetch(`${API_BASE_URL}/api/internships/recommended?limit=${limit}`, {
-      headers: {
-        'Authorization': `Bearer ${getAuthToken()}`,
-      },
+      headers,
     });
 
     if (!response.ok) {
@@ -185,10 +202,13 @@ export async function getRecommendedInternships(limit = 5): Promise<Internship[]
 // Recent Activity API
 export async function getRecentActivity(limit = 10): Promise<RecentActivity[]> {
   try {
+    const token = getAuthToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
     const response = await fetch(`${API_BASE_URL}/api/dashboard/activity?limit=${limit}`, {
-      headers: {
-        'Authorization': `Bearer ${getAuthToken()}`,
-      },
+      headers,
     });
 
     if (!response.ok) {
