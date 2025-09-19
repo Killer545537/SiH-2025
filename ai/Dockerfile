@@ -1,13 +1,20 @@
-FROM python:3.13-slim-bookworm
+# Use an official Python runtime as a parent image
+FROM python:3.11-slim
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-
-ADD . /app
-
+# Set the working directory in the container
 WORKDIR /app
 
-RUN uv sync --locked
+# Copy the requirements file into the container at /app
+COPY requirements.txt .
 
-EXPOSE 8000
+# Install any needed packages specified in requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-CMD ["uv", "run", "python", "-m", "src.main"]
+# Copy the src directory into the container at /app
+COPY ./src /app/src
+
+# Command to run the application
+# It tells uvicorn to run the 'app' instance from the 'src.main' module.
+# --host 0.0.0.0 makes it accessible from outside the container.
+# --port 80 is the standard HTTP port.
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "80"]
