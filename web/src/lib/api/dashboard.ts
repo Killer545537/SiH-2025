@@ -30,7 +30,6 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     return await response.json();
   } catch (error) {
     console.error('Error fetching dashboard stats:', error);
-    // Return mock data as fallback
     return {
       totalInternships: 150,
       appliedInternships: 12,
@@ -59,7 +58,6 @@ export async function getApplications(limit = 10): Promise<Application[]> {
     return await response.json();
   } catch (error) {
     console.error('Error fetching applications:', error);
-    // Return mock data as fallback
     return [
       {
         id: "1",
@@ -106,12 +104,11 @@ export async function getCalendarEvents(): Promise<CalendarEvent[]> {
     return await response.json();
   } catch (error) {
     console.error('Error fetching calendar events:', error);
-    // Return mock data as fallback
     return [
       {
         id: "1",
         title: "Technical Interview - TechCorp",
-        date: "2024-01-25T10:00:00Z",
+        date: "2025-01-25T10:00:00Z",
         type: "interview",
         description: "Round 2 technical interview for Full Stack Developer position",
         internshipId: "int-1",
@@ -119,7 +116,7 @@ export async function getCalendarEvents(): Promise<CalendarEvent[]> {
       {
         id: "2",
         title: "Application Deadline - StartupXYZ",
-        date: "2024-01-30T23:59:59Z",
+        date: "2025-01-30T23:59:59Z",
         type: "deadline",
         description: "Last date to apply for Product Manager Intern",
       },
@@ -146,7 +143,6 @@ export async function getProgressData(): Promise<ProgressData> {
     return await response.json();
   } catch (error) {
     console.error('Error fetching progress data:', error);
-    // Return mock data as fallback
     return {
       applications: [
         { month: "Oct", applied: 8, shortlisted: 2, selected: 0 },
@@ -177,7 +173,6 @@ export async function getRecommendedInternships(limit = 5): Promise<Internship[]
     return await response.json();
   } catch (error) {
     console.error('Error fetching recommended internships:', error);
-    // Return mock data as fallback
     return [
       {
         id: "rec-1",
@@ -190,8 +185,8 @@ export async function getRecommendedInternships(limit = 5): Promise<Internship[]
         duration: "6 months",
         location: "Remote",
         type: "remote",
-        applicationDeadline: "2024-02-15",
-        startDate: "2024-03-01",
+        applicationDeadline: "2025-02-15",
+        startDate: "2025-03-01",
         isRecommended: true,
         matchPercentage: 92,
       },
@@ -218,21 +213,20 @@ export async function getRecentActivity(limit = 10): Promise<RecentActivity[]> {
     return await response.json();
   } catch (error) {
     console.error('Error fetching recent activity:', error);
-    // Return mock data as fallback
     return [
       {
         id: "1",
         type: "application",
         title: "Applied to Full Stack Developer",
         description: "Your application has been submitted successfully",
-        timestamp: "2024-01-15T10:30:00Z",
+        timestamp: "2025-01-15T10:30:00Z",
       },
       {
         id: "2",
         type: "shortlist",
         title: "Shortlisted for Data Science Intern",
         description: "Congratulations! You've been shortlisted for the next round",
-        timestamp: "2024-01-14T15:45:00Z",
+        timestamp: "2025-01-14T15:45:00Z",
       },
     ];
   }
