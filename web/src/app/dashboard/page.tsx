@@ -42,8 +42,8 @@ import Link from "next/link";
 
 // Mock user data
 const mockUser = {
-  displayName: 'John Doe',
-  primaryEmail: 'john.doe@example.com',
+  displayName: 'Rahul Kumar Singh',
+  primaryEmail: 'rahul.kr.singh@gmail.com',
 };
 
 export default function DashboardPage() {
